@@ -26,6 +26,16 @@ from tangerine_linux.core.deps import (
     list_tesseract_langs,
     missing_system_tools,
 )
+from tangerine_linux.core.integration import (
+    autostart_desktop_path,
+    clear_configured_marker,
+    enable_autostart,
+    is_autostart_enabled,
+    is_first_run,
+    mark_configured,
+    register_default_shortcut,
+    unregister_default_shortcut,
+)
 from tangerine_linux.core.router import route_files
 from tangerine_linux.ui.radial_wheel import FloatingOrb, RadialWheel, paint_tangerine_gem
 
@@ -112,6 +122,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Check Python, PyQt6, FFmpeg, Tesseract OCR, and display session diagnostics.",
     )
     parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Configure login autostart (--no-orb) and the default Super+Shift+T shortcut.",
+    )
+    parser.add_argument(
+        "--uninstall-integration",
+        action="store_true",
+        help="Remove login autostart entry and OS Super+Shift+T shortcut.",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -168,6 +188,41 @@ def run_doctor() -> int:
     return 0
 
 
+def run_setup() -> int:
+    """Apply autostart (--no-orb) and OS Super+Shift+T shortcut, then print status."""
+    autostart_ok = enable_autostart(True)
+    shortcut_ok = register_default_shortcut()
+    mark_configured(autostart=autostart_ok, shortcut_registered=shortcut_ok)
+
+    print("TangerineLinux Desktop Integration")
+    print("-" * 44)
+    print(f"Autostart (--no-orb) : [OK] {autostart_desktop_path()}")
+    if shortcut_ok:
+        print("OS Shortcut          : [OK] Super+Shift+T -> tangerine --summon")
+    else:
+        print(
+            "OS Shortcut          : [FALLBACK] Unsupported DE for native shortcut; "
+            "in-process Super+Shift+T listener will be used while running."
+        )
+    return 0
+
+
+def run_uninstall_integration() -> int:
+    """Remove autostart .desktop entry, custom OS shortcut, and setup marker."""
+    enable_autostart(False)
+    shortcut_removed = unregister_default_shortcut()
+    clear_configured_marker()
+
+    print("TangerineLinux Integration Removed")
+    print("-" * 44)
+    print(f"Autostart entry      : [REMOVED] {autostart_desktop_path()}")
+    print(
+        f"OS Shortcut          : {'[REMOVED]' if shortcut_removed else '[SKIPPED]'} "
+        "Super+Shift+T"
+    )
+    return 0
+
+
 def _notify_missing_dependencies_on_startup() -> None:
     """Send a single non-blocking startup notification if ffmpeg or tesseract is missing."""
     missing = missing_system_tools()
@@ -213,6 +268,7 @@ class AppController(QObject):
         wheel: RadialWheel,
         orb: FloatingOrb,
         toggle_orb_action: QAction,
+        autostart_action: QAction,
         tray_icon: QSystemTrayIcon,
         ipc_server: QLocalServer | None = None,
         parent: QObject | None = None,
@@ -221,6 +277,7 @@ class AppController(QObject):
         self._wheel = wheel
         self._orb = orb
         self._toggle_orb_action = toggle_orb_action
+        self._autostart_action = autostart_action
         self._tray_icon = tray_icon
         self._ipc_server = ipc_server
         self._hotkey_listener: object | None = None
@@ -231,6 +288,7 @@ class AppController(QObject):
     @pyqtSlot()
     def sync_toggle_action(self) -> None:
         self._toggle_orb_action.setChecked(self._orb.is_enabled())
+        self._autostart_action.setChecked(is_autostart_enabled())
 
     @pyqtSlot(bool)
     def on_toggle_orb(self, checked: bool) -> None:
@@ -238,6 +296,11 @@ class AppController(QObject):
             self._orb.set_enabled(False)
         else:
             self._orb.set_enabled(checked)
+        self.sync_toggle_action()
+
+    @pyqtSlot(bool)
+    def on_toggle_autostart(self, checked: bool) -> None:
+        enable_autostart(checked)
         self.sync_toggle_action()
 
     @pyqtSlot()
@@ -308,6 +371,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.doctor:
         return run_doctor()
+    if args.setup:
+        return run_setup()
+    if args.uninstall_integration:
+        return run_uninstall_integration()
 
     app = QApplication(sys.argv)
     app.setApplicationName("TangerineLinux")
@@ -316,6 +383,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Single-instance check via QLocalSocket
     if notify_running_instance(b"SUMMON\n"):
         return 0
+
+    if is_first_run():
+        enable_autostart(True)
+        os_shortcut_registered = register_default_shortcut()
+        mark_configured(autostart=True, shortcut_registered=os_shortcut_registered)
+        send_notification(
+            "TangerineLinux is ready",
+            "TangerineLinux is ready in the background. Press Super+Shift+T anytime to summon the wheel.",
+        )
+    else:
+        os_shortcut_registered = register_default_shortcut()
 
     _notify_missing_dependencies_on_startup()
 
@@ -335,17 +413,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         orb.show()
 
     tray_icon = QSystemTrayIcon(create_tangerine_tray_icon(), parent=app)
-    tray_icon.setToolTip("TangerineLinux — Drag files or press Ctrl+Alt+X")
+    tray_icon.setToolTip("TangerineLinux — Drag files or press Super+Shift+T")
 
     tray_menu = QMenu()
-    summon_action = QAction("Summon Wheel at Cursor (Ctrl+Alt+X)", tray_menu)
+    summon_action = QAction("Summon Wheel at Cursor (Super+Shift+T)", tray_menu)
     toggle_orb_action = QAction("Toggle Floating Orb", tray_menu)
     toggle_orb_action.setCheckable(True)
     toggle_orb_action.setChecked(orb.is_enabled())
+    autostart_action = QAction("Start on Login (Background)", tray_menu)
+    autostart_action.setCheckable(True)
+    autostart_action.setChecked(is_autostart_enabled())
     quit_action = QAction("Quit", tray_menu)
 
     tray_menu.addAction(summon_action)
     tray_menu.addAction(toggle_orb_action)
+    tray_menu.addAction(autostart_action)
     tray_menu.addSeparator()
     tray_menu.addAction(quit_action)
     tray_icon.setContextMenu(tray_menu)
@@ -354,6 +436,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         wheel,
         orb,
         toggle_orb_action,
+        autostart_action,
         tray_icon,
         ipc_server=ipc_server,
         parent=app,
@@ -363,6 +446,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     tray_menu.aboutToShow.connect(controller.sync_toggle_action)
     summon_action.triggered.connect(controller.summon_wheel_at_cursor)
     toggle_orb_action.triggered.connect(controller.on_toggle_orb)
+    autostart_action.triggered.connect(controller.on_toggle_autostart)
     quit_action.triggered.connect(app.quit)
     tray_icon.show()
 
@@ -372,19 +456,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         Qt.ConnectionType.QueuedConnection,
     )
 
-    try:
-        from pynput import keyboard
+    # Avoid double-triggering: only run pynput Super+Shift+T listener if OS shortcut wasn't registered
+    if not os_shortcut_registered:
+        try:
+            from pynput import keyboard
 
-        hotkey_listener = keyboard.GlobalHotKeys(
-            {"<ctrl>+<alt>+x": hotkey_bridge.triggered.emit}
-        )
-        hotkey_listener.start()
-        controller.set_hotkey_listener(hotkey_listener)
-    except Exception as exc:
-        print(
-            f"Warning: Could not register global hotkey Ctrl+Alt+X: {exc}",
-            file=sys.stderr,
-        )
+            hotkey_listener = keyboard.GlobalHotKeys(
+                {"<cmd>+<shift>+t": hotkey_bridge.triggered.emit}
+            )
+            hotkey_listener.start()
+            controller.set_hotkey_listener(hotkey_listener)
+        except Exception as exc:
+            print(
+                f"Warning: Could not register global hotkey Super+Shift+T: {exc}",
+                file=sys.stderr,
+            )
 
     if args.summon:
         QTimer.singleShot(0, controller.summon_wheel_at_cursor)

@@ -109,54 +109,21 @@ if command -v update-desktop-database >/dev/null 2>&1; then
 fi
 echo "Created desktop entry at $DESKTOP_FILE"
 
-# 5. Optional OS keyboard shortcut setup (Super+Shift+T -> tangerine --summon)
-configure_gsettings_shortcut() {
-    local base_schema="$1"
-    local list_key="$2"
-    local entry_prefix="$3"
-    local slot_name="tangerine-summon"
-    local slot_path="${entry_prefix}${slot_name}/"
-
-    local current_list
-    current_list="$(gsettings get "$base_schema" "$list_key" 2>/dev/null || echo "[]")"
-    if [[ "$current_list" != *"'$slot_name'"* ]]; then
-        if [[ "$current_list" == "@as []" || "$current_list" == "[]" ]]; then
-            new_list="['$slot_name']"
-        else
-            new_list="${current_list%]*}, '$slot_name']"
-        fi
-        gsettings set "$base_schema" "$list_key" "$new_list"
-    fi
-
-    gsettings set "${base_schema}.custom-keybinding:${slot_path}" name "Summon TangerineLinux"
-    gsettings set "${base_schema}.custom-keybinding:${slot_path}" command "tangerine --summon"
-    gsettings set "${base_schema}.custom-keybinding:${slot_path}" binding "['<Super><Shift>t']" 2>/dev/null \
-        || gsettings set "${base_schema}.custom-keybinding:${slot_path}" binding "<Super><Shift>t"
-}
-
-DESKTOP_ENV="${XDG_CURRENT_DESKTOP:-}"
-if command -v gsettings >/dev/null 2>&1; then
-    if [[ "$DESKTOP_ENV" == *"Cinnamon"* ]]; then
-        if configure_gsettings_shortcut "org.cinnamon.desktop.keybindings" "custom-list" "/org/cinnamon/desktop/keybindings/custom-keybindings/" 2>/dev/null; then
-            echo "Configured Cinnamon shortcut: Super+Shift+T -> tangerine --summon"
-        fi
-    elif [[ "$DESKTOP_ENV" == *"GNOME"* ]]; then
-        if configure_gsettings_shortcut "org.gnome.settings-daemon.plugins.media-keys" "custom-keybindings" "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/" 2>/dev/null; then
-            echo "Configured GNOME shortcut: Super+Shift+T -> tangerine --summon"
-        fi
-    fi
+# 5. Configure login autostart (--no-orb) & OS Super+Shift+T shortcut via tangerine --setup
+TANGERINE_BIN="$(command -v tangerine || echo "$HOME/.local/bin/tangerine")"
+if [[ -x "$TANGERINE_BIN" ]]; then
+    "$TANGERINE_BIN" --setup
+else
+    echo "Warning: 'tangerine' binary not found on PATH yet; run 'tangerine --setup' after updating PATH."
 fi
 
 echo ""
 echo "=== Installation Complete ==="
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    echo "Note: Add \$HOME/.local/bin to your PATH to run 'tangerine' from any terminal."
+    echo "Note: Run 'uv tool update-shell' (or add \$HOME/.local/bin to PATH) to run 'tangerine' anywhere."
 fi
 echo "Usage:"
 echo "  tangerine            # Start floating citrus orb + system tray"
-echo "  tangerine --summon   # Summon radial wheel at cursor"
+echo "  tangerine --summon   # Summon radial wheel at cursor (Super+Shift+T)"
 echo "  tangerine --no-orb   # Start minimized to tray / hotkey only"
-echo ""
-echo "Keyboard Shortcut Setup (any Desktop Environment):"
-echo "  Bind 'Super+Shift+T' (or any shortcut) to: tangerine --summon"
-echo "  (On KDE Plasma: System Settings -> Shortcuts -> Custom Shortcuts -> Add Command)"
+echo "  tangerine --doctor   # Check system dependencies"
