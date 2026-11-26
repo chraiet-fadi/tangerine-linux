@@ -1,101 +1,123 @@
+<div align="center">
+
+<img src="assets/tangerine.png" alt="TangerineLinux" width="84" height="84" />
+
 # TangerineLinux
 
-A lightweight, 100% offline radial file converter, quick-actions dial, and local AI utility for Linux — inspired by Tangerine for Mac and built with Python, PyQt6, Pillow, FFmpeg, `pypdf`, `rembg`, and Tesseract OCR.
+*A lightweight, offline radial file converter and quick-actions dial for Linux.*
 
-## Features
+![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Linux%20(X11%20%2F%20Wayland)-FCC624?style=flat-square&logo=linux&logoColor=black)
+![License](https://img.shields.io/badge/License-MIT-FF6B00?style=flat-square)
 
-- **Frosted Acrylic Radial Wheel + Citrus Floating Orb:**
-  - Docks discreetly as a translucent `56×56` citrus-gem orb on the right edge of your screen.
-  - Drag any supported file onto the orb (or press your global shortcut) to spring open a `320×320` frosted-glass 6-slice radial wheel.
-  - Supports both **zero-click drag-and-drop** and **click-to-convert** interaction.
-- **Dual-Mode Context Routing (`CONVERT` & `ACTIONS`):**
-  - Switch modes instantly with `Tab`, right-click anywhere on the wheel, or clicking the hub's mode badge/dots.
-  - **Convert Mode (`#FF5E00`):**
-    - **Images** (`.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`, `.tiff`): `WEBP`, `JPG`, `PNG`, `AVIF`, `ICO`, `TIFF`
-    - **Audio** (`.wav`, `.mp3`, `.flac`, `.ogg`, `.m4a`, `.opus`): `MP3`, `FLAC`, `OGG`, `M4A`, `WAV`, `OPUS`
-    - **Video** (`.mp4`, `.mkv`, `.mov`, `.avi`, `.webm`): `MP4`, `GIF`, `WEBM`, `MP3 (Audio)`, `MKV`, `MOV`
-  - **Quick Actions Mode (`#7C3AED` badge / Tangerine glow):**
-    - **Images:** `Remove BG` (local `u2netp`), `OCR Text` (copies to clipboard + saves `.txt`), `Compress`, `To PDF`, `Collage` (1–4 image grid), `Strip EXIF`
-    - **Audio:** `Compress 128k`, `Normalize`, `Trim Silence`, `Mono Mix`, `Extract Info`, `Fade In/Out`
-    - **Video:** `Compress H.264`, `720p Resize`, `Mute Audio`, `First Frame JPG`, `Speed 2x`, `Strip Metadata`
-    - **PDF** (auto-opens in Actions Mode): `Merge PDFs`, `Split Pages`, `Extract Text`, `Compress PDF`, `Rotate 90°`, `Metadata Info`
-- **Zero-Idle-RAM Ephemeral AI Architecture:**
-  - `rembg` (`onnxruntime` + `u2netp`) and `pytesseract` are never imported into the main GUI process.
-  - AI actions execute inside isolated `multiprocessing` (`spawn`) child processes that exit immediately upon completion so the Linux kernel reclaims 100% of AI/ONNX memory right away.
-  - `pypdf` is lazy-loaded only when PDF actions are invoked.
-- **Single-Instance CLI, System Tray & Global Hotkey:**
-  - Built-in `QSystemTrayIcon` and `Ctrl+Alt+X` global hotkey.
-  - `QLocalServer` / `QLocalSocket` single-instance IPC lets OS keyboard shortcuts summon the active wheel instantly via `tangerine --summon` with zero duplicate processes.
+<!-- Replace with a short screen recording GIF of the radial wheel in action -->
+![TangerineLinux Radial Wheel](assets/demo.gif)
+
+</div>
+
+---
+
+## Why TangerineLinux
+
+- **Keyboard-first or drag-and-drop workflow:** Summon the translucent radial dial under your cursor with `Super + Shift + T`, or drag files onto the `56x56` floating citrus orb on the right edge of your screen.
+- **Dual-mode wheel (`Tab` or `Right-Click`):** Switch immediately between **Convert Mode** (target formats) and **Actions Mode** (compression, PDF tools, metadata stripping, background removal, OCR).
+- **100% offline and local:** All processing runs on your machine using Pillow, FFmpeg, `pypdf`, Tesseract OCR, and `rembg` (`u2netp`)—no cloud uploads, no API keys.
+- **Ephemeral AI memory design:** Background removal and OCR execute inside isolated `multiprocessing` (`spawn`) child processes that exit immediately after finishing so the Linux kernel reclaims 100% of ONNX/AI RAM right away—keeping main-process idle RSS around `~80 MB` (and `~98 MB` after AI tasks, measured via `/proc/self/status`).
+
+---
+
+## Supported Formats & Quick Actions
+
+| Category | Convert Mode | Actions Mode |
+| :--- | :--- | :--- |
+| **Images**<br>`.png` `.jpg` `.jpeg` `.webp` `.bmp` `.tiff` | `WEBP`, `JPG`, `PNG`, `AVIF`, `ICO`, `TIFF` | `Remove BG` (local AI), `OCR Text` (saves `.txt` + copies to clipboard), `Compress`, `To PDF`, `Collage`, `Strip EXIF` |
+| **Audio**<br>`.wav` `.mp3` `.flac` `.ogg` `.m4a` `.opus` | `MP3`, `FLAC`, `OGG`, `M4A`, `WAV`, `OPUS` | `Compress 128k`, `Normalize`, `Trim Silence`, `Mono Mix`, `Extract Info`, `Fade In/Out` |
+| **Video**<br>`.mp4` `.mkv` `.mov` `.avi` `.webm` | `MP4`, `GIF`, `WEBM`, `MP3 (Audio)`, `MKV`, `MOV` | `Compress H.264`, `720p Resize`, `Mute Audio`, `First Frame JPG`, `Speed 2x`, `Strip Metadata` |
+| **PDF**<br>`.pdf` | — | `Merge PDFs`, `Split Pages`, `Extract Text`, `Compress PDF`, `Rotate 90°`, `Metadata Info` |
+
+---
 
 ## Installation
 
-### 1. System Dependencies
+### Step 1 — System Dependencies
 
-Install `ffmpeg` and `tesseract-ocr` for audio/video conversions and local OCR:
+Install `ffmpeg` and `tesseract-ocr` for audio/video processing and local OCR:
 
-- **Ubuntu / Debian / Linux Mint:**
+- **Ubuntu / Linux Mint / Debian:**
   ```bash
-  sudo apt install -y ffmpeg tesseract-ocr tesseract-ocr-eng libnotify-bin
+  sudo apt update && sudo apt install -y ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-ara tesseract-ocr-fra
   ```
 - **Fedora:**
   ```bash
-  sudo dnf install -y ffmpeg tesseract tesseract-langpack-eng libnotify
+  sudo dnf install -y ffmpeg tesseract tesseract-langpack-eng
   ```
-- **Arch Linux / Manjaro:**
+- **Arch Linux:**
   ```bash
-  sudo pacman -S ffmpeg tesseract tesseract-data-eng libnotify
+  sudo pacman -S ffmpeg tesseract tesseract-data-eng
   ```
 
-### 2. One-Command Install
+### Step 2 — Install TangerineLinux
 
-Install `tangerine` globally straight from GitHub using `uv`:
+#### Primary Method (`uv`)
 
 ```bash
 uv tool install git+https://github.com/chraiet-fadi/tangerine-linux.git
 ```
 
-> **Note:** If `tangerine` is not found in your terminal after installing, add `uv`'s tool bin directory (`~/.local/bin`) to your `PATH`:
+> **Tip:** If `tangerine` is not recognized in your shell after installation, add `~/.local/bin` to your `PATH`:
 > ```bash
 > uv tool update-shell
 > ```
-> Then open a new terminal (or `source ~/.bashrc` / `~/.zshrc`).
+> Then open a new terminal session.
 
-#### Optional: Full Desktop Integration (`./install.sh`)
-
-If you also want a `.desktop` launcher, application icon, and automatic `Super+Shift+T` shortcut setup on Cinnamon/GNOME:
+#### Alternative Method (Includes Desktop Menu Icon & Launcher)
 
 ```bash
 git clone https://github.com/chraiet-fadi/tangerine-linux.git
 cd tangerine-linux
+chmod +x install.sh
 ./install.sh
 ```
 
-### 3. Run & Bind a Global Shortcut
+---
 
-```bash
-tangerine            # Start floating citrus orb + system tray
-tangerine --summon   # Summon radial wheel at cursor (uses clipboard files or opens ready to drop)
-tangerine --no-orb   # Start minimized to system tray & hotkey only
-tangerine --doctor   # Check Python, PyQt6, ffmpeg, tesseract, and display server
-tangerine --help     # Show CLI options
-```
+## Usage & Keyboard Workflow
 
-To summon TangerineLinux instantly from anywhere on **any** desktop environment (Cinnamon, GNOME, KDE Plasma, XFCE, Hyprland, Sway, i3):
-1. Open your desktop environment's **Keyboard Shortcuts** settings.
-2. Add a custom shortcut (e.g., `Super+Shift+T`) with command:
-   ```bash
-   tangerine --summon
-   ```
-3. When `tangerine` is already running, `tangerine --summon` sends `"SUMMON"` over the `tangerine-linux-ipc` local socket to pop the radial wheel centered at your cursor immediately without spawning duplicate processes.
+On your first launch, `tangerine` automatically enables silent background login autostart (`~/.config/autostart/tangerine-linux.desktop` running `tangerine --no-orb`) and binds `Super + Shift + T` to `tangerine --summon` natively on **Cinnamon**, **GNOME**, **XFCE**, and **KDE Plasma** (falling back to an in-process `pynput` listener on other window managers without double-triggering).
 
-## Architecture Highlights
+**Daily workflow:**
+1. Copy one or more files in your file manager with `Ctrl + C` (or drag files directly onto the floating orb).
+2. Press `Super + Shift + T` to open the radial wheel centered at your cursor.
+3. Click or drop onto any slice (`Tab` or `Right-Click` toggles between `CONVERT` and `ACTIONS`; `Esc` or clicking the center hub cancels).
 
-- **`src/tangerine_linux/main.py`:** `argparse` CLI, `QLocalServer`/`QLocalSocket` single-instance IPC, `QSystemTrayIcon`, and thread-safe `pynput` hotkey bridge (`AppController`).
-- **`src/tangerine_linux/ui/radial_wheel.py`:** Fixed-size two-window X11 design (`FloatingOrb` `56×56`, `RadialWheel` `320×320`) with pre-rendered frosted-acrylic backdrop pixmap caching, spring `QPainter` animations, and `@pyqtSlot` queued signal relays.
-- **`src/tangerine_linux/core/router.py`:** Extension detection, dual-mode slice mapping, and mixed-drop filtering.
-- **`src/tangerine_linux/core/converters.py`:** Async `QThreadPool` Pillow & FFmpeg conversion workers with non-overwriting output naming (`_converted`, `_converted_1`).
-- **`src/tangerine_linux/core/actions.py`:** Async quick actions engine with lazy `pypdf` imports and ephemeral `spawn` child processes for `Remove BG` and `OCR Text`.
+**Notes:**
+- Output files are written alongside the source file with safe auto-incrementing names (`_converted`, `_nobg`, `_ocr`, etc.) and never overwrite originals.
+- The first `Remove BG` run downloads the `u2netp` model (~4.7 MB) once into `~/.rembg/`; every subsequent run is completely offline.
 
-## License
+<details>
+<summary>Architecture & Manual Window Manager Keybinding</summary>
 
-MIT License — Copyright (c) 2026 Fadi Chraiet. See [LICENSE](LICENSE).
+- **Single-instance IPC:** `tangerine --summon` connects to the `tangerine-linux-ipc` `QLocalServer` socket and signals the active background process instead of spawning a second Qt instance.
+- **Tiling WMs (i3 / Sway / Hyprland):** Add a binding in your WM config pointing `Super+Shift+T` to `tangerine --summon`.
+- **Two-window X11 design:** `FloatingOrb` (`56x56`) and `RadialWheel` (`320x320`) keep fixed sizes with a cached frosted-glass backdrop `QPixmap` and `QPainter`-only spring animations to avoid X11 XDND flicker.
+
+</details>
+
+---
+
+## CLI Reference
+
+| Command | Description |
+| :--- | :--- |
+| `tangerine` | Start the floating orb and system tray (runs first-run setup if needed). |
+| `tangerine --summon` | Summon the radial wheel at the cursor (uses clipboard files or opens ready to drop). |
+| `tangerine --no-orb` | Start minimized to the system tray and hotkey listener without showing the orb. |
+| `tangerine --doctor` | Inspect Python, PyQt6, `ffmpeg`, `tesseract` languages, and display server status. |
+| `tangerine --setup` | Re-apply login autostart (`--no-orb`) and the `Super + Shift + T` OS shortcut. |
+| `tangerine --uninstall-integration` | Remove the autostart `.desktop` entry and custom OS shortcut. |
+
+---
+
+## License & Author
+
+Released under the [MIT License](LICENSE) by **Fadi Chraiet** ([@chraiet-fadi](https://github.com/chraiet-fadi)).
