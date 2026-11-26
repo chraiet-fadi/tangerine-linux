@@ -19,7 +19,7 @@
 
 ## Why TangerineLinux
 
-- **Keyboard-first or drag-and-drop workflow:** Summon the translucent radial dial under your cursor with `Super + Shift + T`, or drag files onto the `56x56` floating citrus orb on the right edge of your screen.
+- **Keyboard-first or drag-and-drop workflow:** Summon the translucent radial dial under your cursor with `F9`, or drag files onto the `56x56` floating citrus orb on the right edge of your screen.
 - **Dual-mode wheel (`Tab` or `Right-Click`):** Switch immediately between **Convert Mode** (target formats) and **Actions Mode** (compression, PDF tools, metadata stripping, background removal, OCR).
 - **100% offline and local:** All processing runs on your machine using Pillow, FFmpeg, `pypdf`, Tesseract OCR, and `rembg` (`u2netp`)—no cloud uploads, no API keys.
 - **Ephemeral AI memory design:** Background removal and OCR execute inside isolated `multiprocessing` (`spawn`) child processes that exit immediately after finishing so the Linux kernel reclaims 100% of ONNX/AI RAM right away—keeping main-process idle RSS around `~80 MB` (and `~98 MB` after AI tasks, measured via `/proc/self/status`).
@@ -83,11 +83,13 @@ chmod +x install.sh
 
 ## Usage & Keyboard Workflow
 
-On your first launch, `tangerine` automatically enables silent background login autostart (`~/.config/autostart/tangerine-linux.desktop` running `tangerine --no-orb`) and binds `Super + Shift + T` to `tangerine --summon` natively on **Cinnamon**, **GNOME**, **XFCE**, and **KDE Plasma** (falling back to an in-process `pynput` listener on other window managers without double-triggering).
+Run `tangerine --setup` (or launch `tangerine` once) to automatically enable silent background login autostart (`~/.config/autostart/tangerine-linux.desktop` running `--no-orb`) and register **`F9`** → `~/.local/bin/tangerine --summon` natively on **Cinnamon**, **GNOME**, **XFCE**, and **KDE Plasma** (falling back to an in-process `pynput` `F9` listener on other window managers without double-triggering).
+
+> **Tip:** If your desktop session requires a reload after `tangerine --setup`, bind `~/.local/bin/tangerine --summon` to `F9` (or any custom key) in **System Settings → Keyboard → Shortcuts**.
 
 **Daily workflow:**
 1. Copy one or more files in your file manager with `Ctrl + C` (or drag files directly onto the floating orb).
-2. Press `Super + Shift + T` to open the radial wheel centered at your cursor.
+2. Press `F9` to open the radial wheel centered at your cursor.
 3. Click or drop onto any slice (`Tab` or `Right-Click` toggles between `CONVERT` and `ACTIONS`; `Esc` or clicking the center hub cancels).
 
 **Notes:**
@@ -98,7 +100,7 @@ On your first launch, `tangerine` automatically enables silent background login 
 <summary>Architecture & Manual Window Manager Keybinding</summary>
 
 - **Single-instance IPC:** `tangerine --summon` connects to the `tangerine-linux-ipc` `QLocalServer` socket and signals the active background process instead of spawning a second Qt instance.
-- **Tiling WMs (i3 / Sway / Hyprland):** Add a binding in your WM config pointing `Super+Shift+T` to `tangerine --summon`.
+- **Tiling WMs (i3 / Sway / Hyprland):** Add a binding in your WM config pointing `F9` (or any preferred key) to `~/.local/bin/tangerine --summon`.
 - **Two-window X11 design:** `FloatingOrb` (`56x56`) and `RadialWheel` (`320x320`) keep fixed sizes with a cached frosted-glass backdrop `QPixmap` and `QPainter`-only spring animations to avoid X11 XDND flicker.
 
 </details>
@@ -113,7 +115,7 @@ On your first launch, `tangerine` automatically enables silent background login 
 | `tangerine --summon` | Summon the radial wheel at the cursor (uses clipboard files or opens ready to drop). |
 | `tangerine --no-orb` | Start minimized to the system tray and hotkey listener without showing the orb. |
 | `tangerine --doctor` | Inspect Python, PyQt6, `ffmpeg`, `tesseract` languages, and display server status. |
-| `tangerine --setup` | Re-apply login autostart (`--no-orb`) and the `Super + Shift + T` OS shortcut. |
+| `tangerine --setup` | Re-apply login autostart (`--no-orb`) and the `F9` OS shortcut. |
 | `tangerine --uninstall` | Stop running instance and remove autostart, desktop icon, config, and OS shortcut. |
 
 ---

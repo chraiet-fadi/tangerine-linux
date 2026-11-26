@@ -138,7 +138,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--setup",
         action="store_true",
-        help="Configure login autostart (--no-orb) and the default Super+Shift+T shortcut.",
+        help="Configure login autostart (--no-orb) and the default F9 shortcut.",
     )
     parser.add_argument(
         "--uninstall",
@@ -205,7 +205,7 @@ def run_doctor() -> int:
 
 
 def run_setup() -> int:
-    """Apply autostart (--no-orb) and OS Super+Shift+T shortcut, then print status."""
+    """Apply autostart (--no-orb) and OS F9 shortcut, then print status."""
     exec_path = _get_executable_path()
     autostart_ok = enable_autostart(True)
     shortcut_ok = register_default_shortcut()
@@ -216,11 +216,11 @@ def run_setup() -> int:
     print(f"Executable           : {exec_path}")
     print(f"Autostart (--no-orb) : [OK] {autostart_desktop_path()}")
     if shortcut_ok:
-        print(f"OS Shortcut          : [OK] Super+Shift+T -> {exec_path} --summon")
+        print(f"OS Shortcut          : [OK] F9 -> {exec_path} --summon")
     else:
         print(
             "OS Shortcut          : [FALLBACK] Unsupported DE for native shortcut; "
-            "in-process Super+Shift+T listener will be used while running."
+            "in-process F9 listener will be used while running."
         )
     return 0
 
@@ -243,7 +243,7 @@ def run_uninstall() -> int:
     print(f"Config directory     : [REMOVED] {config_dir_path()}")
     print(
         f"OS Shortcut          : {'[REMOVED]' if shortcut_removed else '[SKIPPED]'} "
-        "Super+Shift+T"
+        "F9"
     )
     print("-" * 44)
     if shutil.which("uv"):
@@ -273,11 +273,12 @@ def _notify_missing_dependencies_on_startup() -> None:
     send_notification("TangerineLinux: Optional Dependencies Missing", body, urgency="normal")
 
 
-def notify_running_instance(message: bytes = b"SUMMON\n", timeout_ms: int = 250) -> bool:
-    """Send an IPC command to an already-running instance. Return True if delivered."""
+def notify_running_instance(message: bytes = b"SUMMON\n", timeout_ms: int = 150) -> bool:
+    """Probe and send an IPC command to an already-running instance. Return True if delivered."""
     socket = QLocalSocket()
     socket.connectToServer(IPC_SOCKET_NAME)
     if not socket.waitForConnected(timeout_ms):
+        socket.abort()
         return False
     socket.write(message)
     socket.flush()
@@ -302,32 +303,33 @@ class AppController(QObject):
         toggle_orb_action: QAction,
         autostart_action: QAction,
         tray_icon: QSystemTrayIcon,
+        orb_enabled: bool = True,
         ipc_server: QLocalServer | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._wheel = wheel
         self._orb = orb
+        self._orb_enabled = bool(orb_enabled)
         self._toggle_orb_action = toggle_orb_action
         self._autostart_action = autostart_action
         self._tray_icon = tray_icon
         self._ipc_server = ipc_server
         self._hotkey_listener: object | None = None
+        self._wheel.set_orb_enabled(self._orb_enabled)
 
     def set_hotkey_listener(self, listener: object | None) -> None:
         self._hotkey_listener = listener
 
     @pyqtSlot()
     def sync_toggle_action(self) -> None:
-        self._toggle_orb_action.setChecked(self._orb.is_enabled())
+        self._toggle_orb_action.setChecked(self._orb_enabled)
         self._autostart_action.setChecked(is_autostart_enabled())
 
     @pyqtSlot(bool)
     def on_toggle_orb(self, checked: bool) -> None:
-        if self._wheel.isVisible() and not checked:
-            self._orb.set_enabled(False)
-        else:
-            self._orb.set_enabled(checked)
+        self._orb_enabled = bool(checked)
+        self._wheel.set_orb_enabled(self._orb_enabled)
         self.sync_toggle_action()
 
     @pyqtSlot(bool)
@@ -415,9 +417,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     app.setApplicationName("TangerineLinux")
     app.setQuitOnLastWindowClosed(False)
 
-    # Single-instance check via QLocalSocket
-    if notify_running_instance(b"SUMMON\n"):
+    # Single-instance check via QLocalSocket (150ms probe); clear stale /run/user/$UID or /tmp socket
+    if notify_running_instance(b"SUMMON\n", timeout_ms=150):
         return 0
+    QLocalServer.removeServer(IPC_SOCKET_NAME)
 
     if is_first_run():
         enable_autostart(True)
@@ -425,14 +428,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         mark_configured(autostart=True, shortcut_registered=os_shortcut_registered)
         send_notification(
             "TangerineLinux is ready",
-            "TangerineLinux is ready in the background. Press Super+Shift+T anytime to summon the wheel.",
+            "TangerineLinux is ready in the background. Press F9 anytime to summon the wheel.",
         )
     else:
         os_shortcut_registered = register_default_shortcut()
 
     _notify_missing_dependencies_on_startup()
 
-    QLocalServer.removeServer(IPC_SOCKET_NAME)
     ipc_server = QLocalServer(app)
     if not ipc_server.listen(IPC_SOCKET_NAME):
         print(
@@ -440,21 +442,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
 
+    orb_enabled = not (args.no_orb or args.summon)
     wheel = RadialWheel()
     orb = FloatingOrb(wheel)
-    if args.no_orb:
-        orb.set_enabled(False)
-    else:
-        orb.show()
+    wheel.set_orb_enabled(orb_enabled)
 
     tray_icon = QSystemTrayIcon(create_tangerine_tray_icon(), parent=app)
-    tray_icon.setToolTip("TangerineLinux — Drag files or press Super+Shift+T")
+    tray_icon.setToolTip("TangerineLinux — Drag files or press F9")
 
     tray_menu = QMenu()
-    summon_action = QAction("Summon Wheel at Cursor (Super+Shift+T)", tray_menu)
-    toggle_orb_action = QAction("Toggle Floating Orb", tray_menu)
+    summon_action = QAction("Summon Wheel at Cursor (F9)", tray_menu)
+    toggle_orb_action = QAction("Show Floating Orb", tray_menu)
     toggle_orb_action.setCheckable(True)
-    toggle_orb_action.setChecked(orb.is_enabled())
+    toggle_orb_action.setChecked(orb_enabled)
     autostart_action = QAction("Start on Login (Background)", tray_menu)
     autostart_action.setCheckable(True)
     autostart_action.setChecked(is_autostart_enabled())
@@ -473,6 +473,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         toggle_orb_action,
         autostart_action,
         tray_icon,
+        orb_enabled=orb_enabled,
         ipc_server=ipc_server,
         parent=app,
     )
@@ -487,23 +488,23 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     hotkey_bridge = HotkeyBridge(app)
     hotkey_bridge.triggered.connect(
-        controller.handle_hotkey_summon_or_toggle,
+        controller.summon_wheel_at_cursor,
         Qt.ConnectionType.QueuedConnection,
     )
 
-    # Avoid double-triggering: only run pynput Super+Shift+T listener if OS shortcut wasn't registered
+    # Avoid double-triggering: only run pynput F9 listener if OS shortcut wasn't registered
     if not os_shortcut_registered:
         try:
             from pynput import keyboard
 
             hotkey_listener = keyboard.GlobalHotKeys(
-                {"<cmd>+<shift>+t": hotkey_bridge.triggered.emit}
+                {"<f9>": hotkey_bridge.triggered.emit}
             )
             hotkey_listener.start()
             controller.set_hotkey_listener(hotkey_listener)
         except Exception as exc:
             print(
-                f"Warning: Could not register global hotkey Super+Shift+T: {exc}",
+                f"Warning: Could not register global hotkey F9: {exc}",
                 file=sys.stderr,
             )
 

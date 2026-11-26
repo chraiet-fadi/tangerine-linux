@@ -591,6 +591,7 @@ class RadialWheel(QWidget):
         self.setFixedSize(WHEEL_SIZE, WHEEL_SIZE)
 
         self._orb: FloatingOrb | None = None
+        self._orb_enabled: bool = True
         self._active_route: RouteResult | None = None
         self._mode: WheelMode = WheelMode.CONVERT
         self._slices: tuple[str, ...] = ()
@@ -666,6 +667,21 @@ class RadialWheel(QWidget):
         """Associate the companion FloatingOrb shown when the wheel closes."""
         self._orb = orb
 
+    def set_orb_enabled(self, enabled: bool) -> None:
+        """Control whether FloatingOrb is visible when idle and restored after wheel closes."""
+        self._orb_enabled = bool(enabled)
+        if self._orb is not None:
+            self._orb._enabled = self._orb_enabled
+            if self._orb_enabled and not self.isVisible():
+                self._orb.pop_in()
+            elif not self._orb_enabled:
+                self._orb._hover_anim.stop()
+                self._orb._pop_anim.stop()
+                self._orb.hide()
+
+    def is_orb_enabled(self) -> bool:
+        return self._orb_enabled
+
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
         if not self._x11_blur_attempted:
@@ -733,8 +749,11 @@ class RadialWheel(QWidget):
             self._is_closing = False
             self._slices = ()
             self.hide()
-            if self._orb is not None and self._orb.is_enabled():
-                self._orb.pop_in()
+            if self._orb is not None:
+                if self._orb_enabled:
+                    self._orb.pop_in()
+                else:
+                    self._orb.hide()
 
     def open_with_files(
         self,
@@ -837,8 +856,11 @@ class RadialWheel(QWidget):
         if not self.isVisible():
             self._is_closing = False
             self._slices = ()
-            if self._orb is not None and self._orb.is_enabled():
-                self._orb.pop_in()
+            if self._orb is not None:
+                if self._orb_enabled:
+                    self._orb.pop_in()
+                else:
+                    self._orb.hide()
             return
 
         if self._is_closing:
@@ -1387,9 +1409,11 @@ class FloatingOrb(QWidget):
         return self._enabled
 
     def set_enabled(self, enabled: bool) -> None:
-        self._enabled = enabled
-        if enabled:
-            self.pop_in()
+        self._enabled = bool(enabled)
+        self._radial_wheel._orb_enabled = self._enabled
+        if self._enabled:
+            if not self._radial_wheel.isVisible():
+                self.pop_in()
         else:
             self._hover_anim.stop()
             self._pop_anim.stop()

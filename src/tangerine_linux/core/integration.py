@@ -14,7 +14,7 @@ from tangerine_linux import __version__
 
 SHORTCUT_SLOT = "tangerine-summon"
 SHORTCUT_NAME = "Tangerine"
-SHORTCUT_BINDING = "<Super><Shift>t"
+SHORTCUT_BINDING = "F9"
 
 CINNAMON_SCHEMA = "org.cinnamon.desktop.keybindings"
 CINNAMON_ENTRY_SCHEMA = f"{CINNAMON_SCHEMA}.custom-keybinding"
@@ -297,7 +297,7 @@ def _register_kde_shortcut() -> bool:
         "--group", "services",
         "--group", f"{SHORTCUT_SLOT}.desktop",
         "--key", "_launch",
-        "Meta+Shift+T,none,Tangerine",
+        "F9,none,Tangerine",
     ])
 
 
@@ -318,7 +318,7 @@ def _unregister_kde_shortcut() -> bool:
 
 
 def register_default_shortcut() -> bool:
-    """Bind Super+Shift+T -> '<full_path> --summon' natively for the active desktop."""
+    """Bind F9 -> '<full_path> --summon' natively for the active desktop."""
     desktop = _current_desktop()
     if "cinnamon" in desktop:
         return _register_cinnamon_shortcut()
@@ -332,7 +332,7 @@ def register_default_shortcut() -> bool:
 
 
 def unregister_default_shortcut() -> bool:
-    """Remove the native OS Super+Shift+T shortcut if configured."""
+    """Remove the native OS F9 shortcut if configured."""
     desktop = _current_desktop()
     if "cinnamon" in desktop:
         return _unregister_cinnamon_shortcut()

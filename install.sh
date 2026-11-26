@@ -109,7 +109,7 @@ if command -v update-desktop-database >/dev/null 2>&1; then
 fi
 echo "Created desktop entry at $DESKTOP_FILE"
 
-# 5. Configure login autostart (--no-orb) & OS Super+Shift+T shortcut via tangerine --setup
+# 5. Configure login autostart (--no-orb) & OS F9 shortcut via tangerine --setup
 TANGERINE_BIN="$(command -v tangerine || echo "$HOME/.local/bin/tangerine")"
 if [[ -x "$TANGERINE_BIN" ]]; then
     "$TANGERINE_BIN" --setup
@@ -124,6 +124,6 @@ if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
 fi
 echo "Usage:"
 echo "  tangerine            # Start floating citrus orb + system tray"
-echo "  tangerine --summon   # Summon radial wheel at cursor (Super+Shift+T)"
+echo "  tangerine --summon   # Summon radial wheel at cursor (F9)"
 echo "  tangerine --no-orb   # Start minimized to tray / hotkey only"
 echo "  tangerine --doctor   # Check system dependencies"
