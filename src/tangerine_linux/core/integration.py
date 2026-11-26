@@ -7,13 +7,13 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from tangerine_linux import __version__
 
 SHORTCUT_SLOT = "tangerine-summon"
-SHORTCUT_NAME = "Summon TangerineLinux"
-SHORTCUT_COMMAND = "tangerine --summon"
+SHORTCUT_NAME = "Tangerine"
 SHORTCUT_BINDING = "<Super><Shift>t"
 
 CINNAMON_SCHEMA = "org.cinnamon.desktop.keybindings"
@@ -25,14 +25,40 @@ GNOME_ENTRY_SCHEMA = f"{GNOME_SCHEMA}.custom-keybinding"
 GNOME_ENTRY_PATH = f"/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/{SHORTCUT_SLOT}/"
 
 
+def _get_executable_path() -> str:
+    """Resolve the full executable path for desktop sessions without ~/.local/bin in PATH."""
+    found = shutil.which("tangerine")
+    if found:
+        return found
+    local_bin = Path.home() / ".local" / "bin" / "tangerine"
+    if local_bin.exists():
+        return str(local_bin)
+    return f"{sys.executable} -m tangerine_linux.main"
+
+
 def autostart_desktop_path() -> Path:
     """Return ~/.config/autostart/tangerine-linux.desktop."""
     return Path.home() / ".config" / "autostart" / "tangerine-linux.desktop"
 
 
+def app_desktop_path() -> Path:
+    """Return ~/.local/share/applications/tangerine-linux.desktop."""
+    return Path.home() / ".local" / "share" / "applications" / "tangerine-linux.desktop"
+
+
+def app_icon_path() -> Path:
+    """Return ~/.local/share/icons/hicolor/128x128/apps/tangerine-linux.png."""
+    return Path.home() / ".local" / "share" / "icons" / "hicolor" / "128x128" / "apps" / "tangerine-linux.png"
+
+
+def config_dir_path() -> Path:
+    """Return ~/.config/tangerine-linux."""
+    return Path.home() / ".config" / "tangerine-linux"
+
+
 def configured_marker_path() -> Path:
     """Return ~/.config/tangerine-linux/configured.json."""
-    return Path.home() / ".config" / "tangerine-linux" / "configured.json"
+    return config_dir_path() / "configured.json"
 
 
 def is_autostart_enabled() -> bool:
@@ -44,6 +70,7 @@ def enable_autostart(enabled: bool = True) -> bool:
     """Create or remove ~/.config/autostart/tangerine-linux.desktop for silent login launch."""
     desktop_file = autostart_desktop_path()
     if enabled:
+        exec_path = _get_executable_path()
         desktop_file.parent.mkdir(parents=True, exist_ok=True)
         content = (
             "[Desktop Entry]\n"
@@ -51,7 +78,7 @@ def enable_autostart(enabled: bool = True) -> bool:
             "Version=1.0\n"
             "Name=TangerineLinux\n"
             "Comment=Offline radial file converter, quick actions, and local AI utility\n"
-            "Exec=tangerine --no-orb\n"
+            f"Exec={exec_path} --no-orb\n"
             "Icon=tangerine-linux\n"
             "Terminal=false\n"
             "StartupNotify=false\n"
@@ -98,6 +125,14 @@ def clear_configured_marker() -> None:
     configured_marker_path().unlink(missing_ok=True)
 
 
+def remove_desktop_files_and_config() -> None:
+    """Remove autostart, desktop launcher, app icon, and ~/.config/tangerine-linux/."""
+    autostart_desktop_path().unlink(missing_ok=True)
+    app_desktop_path().unlink(missing_ok=True)
+    app_icon_path().unlink(missing_ok=True)
+    shutil.rmtree(config_dir_path(), ignore_errors=True)
+
+
 def _run_cmd(args: list[str]) -> subprocess.CompletedProcess[str] | None:
     try:
         return subprocess.run(
@@ -109,6 +144,11 @@ def _run_cmd(args: list[str]) -> subprocess.CompletedProcess[str] | None:
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
+
+
+def _set_ok(args: list[str]) -> bool:
+    res = _run_cmd(args)
+    return res is not None and res.returncode == 0
 
 
 def _parse_gsettings_list(raw: str) -> list[str]:
@@ -134,6 +174,10 @@ def _current_desktop() -> str:
     ).lower()
 
 
+def _summon_command() -> str:
+    return f"{_get_executable_path()} --summon"
+
+
 def _register_cinnamon_shortcut() -> bool:
     gsettings = shutil.which("gsettings")
     if not gsettings:
@@ -152,7 +196,7 @@ def _register_cinnamon_shortcut() -> bool:
     target = f"{CINNAMON_ENTRY_SCHEMA}:{CINNAMON_ENTRY_PATH}"
     return (
         _set_ok([gsettings, "set", target, "name", SHORTCUT_NAME])
-        and _set_ok([gsettings, "set", target, "command", SHORTCUT_COMMAND])
+        and _set_ok([gsettings, "set", target, "command", _summon_command()])
         and _set_ok([gsettings, "set", target, "binding", repr([SHORTCUT_BINDING])])
     )
 
@@ -188,7 +232,7 @@ def _register_gnome_shortcut() -> bool:
     target = f"{GNOME_ENTRY_SCHEMA}:{GNOME_ENTRY_PATH}"
     return (
         _set_ok([gsettings, "set", target, "name", SHORTCUT_NAME])
-        and _set_ok([gsettings, "set", target, "command", SHORTCUT_COMMAND])
+        and _set_ok([gsettings, "set", target, "command", _summon_command()])
         and _set_ok([gsettings, "set", target, "binding", SHORTCUT_BINDING])
     )
 
@@ -210,12 +254,13 @@ def _register_xfce_shortcut() -> bool:
     xfconf = shutil.which("xfconf-query")
     if not xfconf:
         return False
+    cmd = _summon_command()
     prop = f"/commands/custom/{SHORTCUT_BINDING}"
-    if _set_ok([xfconf, "-c", "xfce4-keyboard-shortcuts", "-p", prop, "-s", SHORTCUT_COMMAND]):
+    if _set_ok([xfconf, "-c", "xfce4-keyboard-shortcuts", "-p", prop, "-s", cmd]):
         return True
     return _set_ok([
         xfconf, "-c", "xfce4-keyboard-shortcuts", "-p", prop,
-        "-n", "-t", "string", "-s", SHORTCUT_COMMAND,
+        "-n", "-t", "string", "-s", cmd,
     ])
 
 
@@ -239,7 +284,7 @@ def _register_kde_shortcut() -> bool:
         "[Desktop Entry]\n"
         "Type=Application\n"
         f"Name={SHORTCUT_NAME}\n"
-        f"Exec={SHORTCUT_COMMAND}\n"
+        f"Exec={_summon_command()}\n"
         "Icon=tangerine-linux\n"
         "NoDisplay=true\n"
         "StartupNotify=false\n",
@@ -252,7 +297,7 @@ def _register_kde_shortcut() -> bool:
         "--group", "services",
         "--group", f"{SHORTCUT_SLOT}.desktop",
         "--key", "_launch",
-        "Meta+Shift+T,none,Summon TangerineLinux",
+        "Meta+Shift+T,none,Tangerine",
     ])
 
 
@@ -272,13 +317,8 @@ def _unregister_kde_shortcut() -> bool:
     ])
 
 
-def _set_ok(args: list[str]) -> bool:
-    res = _run_cmd(args)
-    return res is not None and res.returncode == 0
-
-
 def register_default_shortcut() -> bool:
-    """Bind Super+Shift+T -> 'tangerine --summon' natively for the active desktop."""
+    """Bind Super+Shift+T -> '<full_path> --summon' natively for the active desktop."""
     desktop = _current_desktop()
     if "cinnamon" in desktop:
         return _register_cinnamon_shortcut()

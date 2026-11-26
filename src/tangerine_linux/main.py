@@ -5,13 +5,23 @@ from __future__ import annotations
 import argparse
 import os
 import platform
+import shutil
 import signal
 import sys
 from pathlib import Path
 from typing import Sequence
 from urllib.parse import unquote, urlparse
 
-from PyQt6.QtCore import PYQT_VERSION_STR, QObject, Qt, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import (
+    PYQT_VERSION_STR,
+    QCoreApplication,
+    QObject,
+    Qt,
+    QTimer,
+    QUrl,
+    pyqtSignal,
+    pyqtSlot,
+)
 from PyQt6.QtGui import QAction, QCursor, QIcon, QPainter, QPixmap
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
@@ -27,13 +37,17 @@ from tangerine_linux.core.deps import (
     missing_system_tools,
 )
 from tangerine_linux.core.integration import (
+    _get_executable_path,
+    app_desktop_path,
+    app_icon_path,
     autostart_desktop_path,
-    clear_configured_marker,
+    config_dir_path,
     enable_autostart,
     is_autostart_enabled,
     is_first_run,
     mark_configured,
     register_default_shortcut,
+    remove_desktop_files_and_config,
     unregister_default_shortcut,
 )
 from tangerine_linux.core.router import route_files
@@ -127,9 +141,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Configure login autostart (--no-orb) and the default Super+Shift+T shortcut.",
     )
     parser.add_argument(
+        "--uninstall",
         "--uninstall-integration",
+        dest="uninstall",
         action="store_true",
-        help="Remove login autostart entry and OS Super+Shift+T shortcut.",
+        help="Stop running instance and remove autostart, desktop entry, icon, config, and OS shortcut.",
     )
     parser.add_argument(
         "--version",
@@ -190,15 +206,17 @@ def run_doctor() -> int:
 
 def run_setup() -> int:
     """Apply autostart (--no-orb) and OS Super+Shift+T shortcut, then print status."""
+    exec_path = _get_executable_path()
     autostart_ok = enable_autostart(True)
     shortcut_ok = register_default_shortcut()
     mark_configured(autostart=autostart_ok, shortcut_registered=shortcut_ok)
 
     print("TangerineLinux Desktop Integration")
     print("-" * 44)
+    print(f"Executable           : {exec_path}")
     print(f"Autostart (--no-orb) : [OK] {autostart_desktop_path()}")
     if shortcut_ok:
-        print("OS Shortcut          : [OK] Super+Shift+T -> tangerine --summon")
+        print(f"OS Shortcut          : [OK] Super+Shift+T -> {exec_path} --summon")
     else:
         print(
             "OS Shortcut          : [FALLBACK] Unsupported DE for native shortcut; "
@@ -207,19 +225,33 @@ def run_setup() -> int:
     return 0
 
 
-def run_uninstall_integration() -> int:
-    """Remove autostart .desktop entry, custom OS shortcut, and setup marker."""
-    enable_autostart(False)
-    shortcut_removed = unregister_default_shortcut()
-    clear_configured_marker()
+def run_uninstall() -> int:
+    """Stop any running instance and remove all desktop integration and config files."""
+    if QCoreApplication.instance() is None:
+        _qt_app = QCoreApplication(sys.argv[:1])  # noqa: F841
 
-    print("TangerineLinux Integration Removed")
+    stopped = notify_running_instance(b"QUIT\n")
+    remove_desktop_files_and_config()
+    shortcut_removed = unregister_default_shortcut()
+
+    print("TangerineLinux Uninstall Cleanup")
     print("-" * 44)
+    print(f"Background instance  : {'[STOPPED]' if stopped else '[NOT RUNNING]'}")
     print(f"Autostart entry      : [REMOVED] {autostart_desktop_path()}")
+    print(f"Desktop launcher     : [REMOVED] {app_desktop_path()}")
+    print(f"Application icon     : [REMOVED] {app_icon_path()}")
+    print(f"Config directory     : [REMOVED] {config_dir_path()}")
     print(
         f"OS Shortcut          : {'[REMOVED]' if shortcut_removed else '[SKIPPED]'} "
         "Super+Shift+T"
     )
+    print("-" * 44)
+    if shutil.which("uv"):
+        print("To remove the CLI package, run: uv tool uninstall tangerine-linux")
+    elif shutil.which("pipx"):
+        print("To remove the CLI package, run: pipx uninstall tangerine-linux")
+    else:
+        print("To remove the CLI package, run: pip uninstall tangerine-linux")
     return 0
 
 
@@ -346,6 +378,9 @@ class AppController(QObject):
             payload = bytes(client.readAll()).decode("utf-8", errors="ignore").strip().upper()
             client.disconnectFromServer()
             client.deleteLater()
+            if "QUIT" in payload:
+                QTimer.singleShot(0, QApplication.quit)
+                return
             if "SUMMON" in payload or payload == "":
                 self.summon_wheel_at_cursor()
 
@@ -373,8 +408,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_doctor()
     if args.setup:
         return run_setup()
-    if args.uninstall_integration:
-        return run_uninstall_integration()
+    if args.uninstall:
+        return run_uninstall()
 
     app = QApplication(sys.argv)
     app.setApplicationName("TangerineLinux")

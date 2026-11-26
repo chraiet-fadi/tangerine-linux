@@ -70,7 +70,7 @@ uv tool install git+https://github.com/chraiet-fadi/tangerine-linux.git
 > ```
 > Then open a new terminal session.
 
-#### Alternative Method (Includes Desktop Menu Icon & Launcher)
+#### Alternative Method (Includes Desktop Menu Icon)
 
 ```bash
 git clone https://github.com/chraiet-fadi/tangerine-linux.git
@@ -114,7 +114,23 @@ On your first launch, `tangerine` automatically enables silent background login 
 | `tangerine --no-orb` | Start minimized to the system tray and hotkey listener without showing the orb. |
 | `tangerine --doctor` | Inspect Python, PyQt6, `ffmpeg`, `tesseract` languages, and display server status. |
 | `tangerine --setup` | Re-apply login autostart (`--no-orb`) and the `Super + Shift + T` OS shortcut. |
-| `tangerine --uninstall-integration` | Remove the autostart `.desktop` entry and custom OS shortcut. |
+| `tangerine --uninstall` | Stop running instance and remove autostart, desktop icon, config, and OS shortcut. |
+
+---
+
+## Uninstalling
+
+To stop the background process, remove all autostart/shortcut/config files, and uninstall the CLI package:
+
+```bash
+tangerine --uninstall && uv tool uninstall tangerine-linux
+```
+
+For cloned installations, run the bundled uninstaller:
+
+```bash
+./uninstall.sh
+```
 
 ---
 
