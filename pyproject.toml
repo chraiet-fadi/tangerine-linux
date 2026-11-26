@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tangerine-linux"
+version = "0.1.0"
+description = "Offline radial file converter, quick-actions, and local AI utility for Linux"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Fadi Chraiet" }]
+dependencies = [
+    "onnxruntime>=1.32.0",
+    "pillow>=13.0.0",
+    "pynput>=1.8.2",
+    "pypdf>=7.1.1",
+    "pyqt6>=6.12.1",
+    "pytesseract>=0.3.13",
+    "rembg[cpu]>=2.0.88",
+]
+
+[project.scripts]
+tangerine = "tangerine_linux.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tangerine_linux"]
